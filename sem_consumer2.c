@@ -126,7 +126,8 @@ void* thread_func(void *msgs)
         int i = 0,j=0;  
         //把小写字母变成大写
         if(!ret)
-        {  
+        {
+        	sem_post(&msg->wsem);  
 	        for(; buf[i] != '\0'; ++i)  
 	        {  
 	            if(buf[i] >= 'a' && buf[i] <= 'z')  
@@ -134,12 +135,12 @@ void* thread_func(void *msgs)
 	                buf[i] -= 'a' - 'A';  
 	            }  
 	        }  
-	        printf("You input %d characters\n", i-1);  
+	        printf("You input %d characters\n", i);  
 	        printf("To Uppercase: %s\n", buf); 
 	        for(i=0;i<2;i++)
 	        	for(j=0;j<100000000;j++);
 	        //把信号量加1，表明子线程处理完成  
-	        sem_post(&msg->wsem);
+	        //sem_post(&msg->wsem);
         }
         //把信号量减1 ,等待生产者 
         sem_wait(&msg->rsem);
