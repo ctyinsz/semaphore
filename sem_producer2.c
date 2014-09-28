@@ -1,8 +1,8 @@
 /*
 生产者进程：负责向消息队列中写入待处理数据，以及退出进程时回收线程
-使用有名信号量做进程和线程间的共享内存同步
-sem_open()
-sem_close()
+使用无名信号量做进程和线程间的共享内存同步
+sem_init()
+sem_destroy()
 
 */
 
@@ -15,13 +15,13 @@ sem_close()
 #include <signal.h>
 #include <sys/shm.h>
 #include <fcntl.h>
-#include "shmdata2.h"
+#include "shmdata.h"
 
 void *thread_producer(void *);
 void sigchld_handler( int  ) ;
 struct share_msg *msg = NULL;
-sem_t *rsem;
-sem_t *wsem;
+//sem_t *rsem;
+//sem_t *wsem;
 
 int main()  
 {  
@@ -63,17 +63,17 @@ int main()
    /********设置队列操作信号量********/ 
    
     //初始化信号量,初始值为0  
-    rsem = sem_open(SEM_NAME_R,O_CREAT,0644,0);
-//    res = sem_open(&msg->rsem, 0, 0);  
-    if(rsem == SEM_FAILED)  
+//    rsem = sem_open(SEM_NAME_R,O_CREAT,0644,0);
+    res = sem_init(&msg->rsem, 1, 0);  
+    if(res == -1)  
     {  
         perror("semaphore intitialization failed\n");  
         exit(EXIT_FAILURE);  
     }  
     //初始化信号量,初始值为1 
-    wsem = sem_open(SEM_NAME_W,O_CREAT,0644,MSG_NUM); 
-//    res = sem_open(&msg->wsem, 0, MSG_NUM);  
-    if( wsem == SEM_FAILED)  
+//    wsem = sem_open(SEM_NAME_W,O_CREAT,0644,MSG_NUM); 
+    res = sem_init(&msg->wsem, 1, MSG_NUM);  
+    if( res == -1)  
     {  
         perror("semaphore intitialization failed\n");  
         exit(EXIT_FAILURE);  
@@ -122,10 +122,10 @@ int main()
     }
     printf("Thread joined\n");  
     //清理信号量  
-    sem_close(rsem);  
-    sem_close(wsem); 
-    sem_unlink(SEM_NAME_W);
-    sem_unlink(SEM_NAME_R);
+    sem_destroy(&msg->rsem);  
+    sem_destroy(&msg->wsem); 
+//    sem_unlink(SEM_NAME_W);
+//    sem_unlink(SEM_NAME_R);
 		//把共享内存从当前进程中分离
 		if(shmdt(shm) == -1)
 		{
@@ -148,7 +148,7 @@ void* thread_producer(void *msgs)
 {
 	char buf[BUF_SIZE]={0};
 	printf("Input some text. Enter 'end'to finish...\n"); 
-    sem_wait(wsem);  
+    sem_wait(&msg->wsem);  
 //    while(strcmp("end\n", buf) != 0) 
     while(1)  
     {  
@@ -156,14 +156,21 @@ void* thread_producer(void *msgs)
         fgets(buf, BUF_SIZE, stdin);
         if(strlen(buf)>0)
         {
-        	datapull(buf);
-        	//把信号量加1 ，启动消费者
-        	sem_post(rsem);         	
+        	if ( buf[strlen(buf)-1] == '\n')
+        		buf[strlen(buf)-1] = 0x00;
+      		if(strlen(buf)>0)
+      		{
+      				datapull(buf);
+      				//把信号量加1 ，启动消费者
+      				sem_post(&msg->rsem);  
+      		}
+      		else  
+      			continue;     	
         }
         else
         	continue;
         //把sem_add的值减1，即等待子线程处理完成  
-        sem_wait(wsem);  
+        sem_wait(&msg->wsem);  
     }
     pthread_exit(NULL);	
 }
